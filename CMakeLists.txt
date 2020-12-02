@@ -8,10 +8,10 @@ project(bebop_control)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  bebop_msg
-  geometry_msg
+  bebop_msgs
+  geometry_msgs
   rospy
-  std_msg
+  std_msgs
   tf
 )
 
@@ -107,7 +107,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES bebop_control
-#  CATKIN_DEPENDS bebop_msg geometry_msg rospy std_msg tf
+#  CATKIN_DEPENDS bebop_msgs geometry_msgs rospy std_msgs tf
 #  DEPENDS system_lib
 )
 
