@@ -120,13 +120,14 @@ class Bebop_functions():
             error_y = -math.sin(self.yaw) * delta_x + \
                 math.cos(self.yaw) * delta_y
 
-            rospy.loginfo("rho: {:.2f}, yaw: {:.2f}".format(rho, self.yaw))
+            rospy.loginfo("rho: {:.2f}, yaw: {:.2f}, current position = {}, {}, {}".format(rho, self.yaw,
+                                                                                           self.bebopose.x, self.bebopose.y, self.bebopose.z))
 
             # robot's body frame convertion for x and y linear velocities
             twist.linear.x = max(min(
-                self.controlX.calculate_pid(error_x), self.vel_lim), -self.vel_lim)
+                self.controlX.calculate_pid(delta_x), self.vel_lim), -self.vel_lim)
             twist.linear.x = max(min(
-                self.controlY.calculate_pid(error_y), self.vel_lim), -self.vel_lim)
+                self.controlY.calculate_pid(delta_y), self.vel_lim), -self.vel_lim)
             twist.linear.x = max(min(
                 self.controlZ.calculate_pid(delta_z), self.vel_lim), -self.vel_lim)
 
@@ -160,8 +161,6 @@ class Bebop_functions():
         quat = msg.transform.rotation
         (roll, pitch, self.yaw) = tf.transformations.euler_from_quaternion(
             (quat.x, quat.y, quat.z, quat.w))
-        print "current position = {}, {}, {}".format(
-            self.bebopose.x, self.bebopose.y, self.bebopose.z)
         self.safety_check()
 
 
