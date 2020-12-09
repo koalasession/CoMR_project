@@ -133,9 +133,11 @@ class Bebop_functions():
 
             # publishing of angular rates and linear velocities
             self.cmdvel_publisher.publish(twist)
-            if rho < 0.2:
+            if rho < 0.5:
                 if len(WAYPOINTS) != 0:
                     self.waypoint = WAYPOINTS.pop(0)
+                    print "new waypoint {}, {}".format(
+                        self.waypoint[0], self.waypoint[1])
                     rospy.sleep(3)
                 else:
                     self.finished = True
@@ -168,7 +170,8 @@ if __name__ == '__main__':
     try:
         node = Bebop_functions()
         node.takeoff()
-        node.move()
+        rospy.sleep(5)
+        # node.move()
         node.land()
     except rospy.ROSInterruptException as e:
         print "Exception: {0}".format(str(e))
