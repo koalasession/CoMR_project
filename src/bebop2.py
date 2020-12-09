@@ -3,6 +3,7 @@
 import rospy
 import tf
 import math
+import matplotlib.pyplot as plt
 from math import atan2, sqrt, cos, sin, pi
 from std_msgs.msg import Empty
 from geometry_msgs.msg import Twist, TransformStamped, Vector3
@@ -10,12 +11,24 @@ from bebop_msgs.msg import Ardrone3PilotingStateFlyingStateChanged
 
 WAYPOINTS = [
     (0, 0),
-    (1.5, 0),
-    (1.5, 1.5),
-    (0, 1.5),
+    (2.0, 0),
+    (2.0, 2.0),
+    (0, 2.0),
     (0, 0)
 ]
 
+x_plot = {
+    'error': [],
+    'time': []
+}
+y_plot = {
+    'error': [],
+    'time': []
+}
+z_plot = {
+    'error': [],
+    'time': []
+}
 
 class PID(object):
     """PID class returns the pid error
@@ -40,7 +53,7 @@ class PID(object):
         self.cumError += error * dt
         pid = self.kp * error + self.kd * \
             (error - self.prevError) / dt + \
-            min(max(-0.2, self.ki * self.cumError), 0.2)
+            self.ki * self.cumError
         self.prevError = error
         return pid
 
@@ -74,9 +87,9 @@ class Bebop_functions():
         self.yaw = 0
         self.bebopose = Vector3()
 
-        self.controlX = PID(0.08, 0.001, 0.05)
-        self.controlY = PID(0.08, 0.001, 0.05)
-        self.controlZ = PID(0.08, 0.001, 0.05)
+        self.controlX = PID(0.3, 0.003, 0.4)
+        self.controlY = PID(0.3, 0.003, 0.42)
+        self.controlZ = PID(0.12, 0.015, 0.2)
 
         self.vel_lim = 2.0
         self.finished = False
@@ -85,7 +98,7 @@ class Bebop_functions():
         self.rate = rospy.Rate(5)
 
     def takeoff(self):  # Take off command function
-        while self.state != 2:
+        while self.state != 2 and not rospy.is_shutdown():
             hello_str = "Takeoff command has been sent %s" % rospy.get_time()
             rospy.loginfo(hello_str)
             self.takeoff_publisher.publish(Empty())
@@ -93,7 +106,9 @@ class Bebop_functions():
         print("Takeoff is done!")
 
     def land(self):  # Land command function
-        while self.state != 0:
+        self.finished = True
+        self.cmdvel_publisher.publish(Twist())
+        while self.state != 0 and not rospy.is_shutdown():
             hello_st = "Land command has been sent %s" % rospy.get_time()
             rospy.loginfo(hello_st)
             self.landing_publisher.publish(Empty())
@@ -120,20 +135,28 @@ class Bebop_functions():
             error_y = -math.sin(self.yaw) * delta_x + \
                 math.cos(self.yaw) * delta_y
 
-            rospy.loginfo("rho: {:.2f}, yaw: {:.2f}, current position = {}, {}, {}".format(rho, self.yaw,
-                                                                                           self.bebopose.x, self.bebopose.y, self.bebopose.z))
 
             # robot's body frame convertion for x and y linear velocities
             twist.linear.x = max(min(
-                self.controlX.calculate_pid(delta_x), self.vel_lim), -self.vel_lim)
-            twist.linear.x = max(min(
-                self.controlY.calculate_pid(delta_y), self.vel_lim), -self.vel_lim)
-            twist.linear.x = max(min(
+                self.controlX.calculate_pid(error_x), self.vel_lim), -self.vel_lim)
+            twist.linear.y = max(min(
+                self.controlY.calculate_pid(error_y), self.vel_lim), -self.vel_lim)
+            twist.linear.z = max(min(
                 self.controlZ.calculate_pid(delta_z), self.vel_lim), -self.vel_lim)
 
+            # rospy.loginfo("rho: {:.2f}, yaw: {:.2f},pos = {}, {}, {}, twist: {}".format(rho, self.yaw,
+            #                                                                                self.bebopose.x, self.bebopose.y, self.bebopose.z, twist.linear))
+            x_plot['error'].append(error_x)
+            x_plot['time'].append(rospy.get_time())
+            y_plot['error'].append(error_y)
+            y_plot['time'].append(rospy.get_time())
+            z_plot['error'].append(delta_z)
+            z_plot['time'].append(rospy.get_time())
+            # rospy.loginfo("rho: {:.2f},pos = {:.2f}, {:.2f}, {:.2f}".format(rho, self.bebopose.x, self.bebopose.y, self.bebopose.z))
+            rospy.loginfo("rho: {:.2f},err = {:.2f}, {:.2f}, {:.2f}".format(rho, error_x, error_y, delta_z))
             # publishing of angular rates and linear velocities
             self.cmdvel_publisher.publish(twist)
-            if rho < 0.5:
+            if rho < 0.1:
                 if len(WAYPOINTS) != 0:
                     self.waypoint = WAYPOINTS.pop(0)
                     print "new waypoint {}, {}".format(
@@ -143,7 +166,9 @@ class Bebop_functions():
                     self.finished = True
 
             self.rate.sleep()
+        self.cmdvel_publisher.publish(twist)
         if self.finished:
+            self.cmdvel_publisher.publish(twist)
             self.land()
         print("Move is done!")
 
@@ -153,7 +178,8 @@ class Bebop_functions():
         self.state = message.state
 
     def safety_check(self):
-        if self.bebopose.x > 3.0 or self.bebopose.x > 3.0 or self.bebopose.z > 2.0:
+        if self.bebopose.x > 4.0 or self.bebopose.x > 4.0 or self.bebopose.z > 2.0:
+            print "EMERGENCY LANDING"
             self.finished = True
 
     # /vicon/yolanda/yolanda callback subscriber to know the position and the yaw angle of the robot
@@ -168,10 +194,25 @@ class Bebop_functions():
 
 if __name__ == '__main__':
     try:
+        import subprocess, shlex
+        command = "rosbag record -a -O ourbag"
+        command = shlex.split(command)
+        rosbag_proc = subprocess.Popen(command)
         node = Bebop_functions()
         node.takeoff()
-        rospy.sleep(5)
-        # node.move()
+        rospy.sleep(2)
+        node.move()
+
+        plt.figure()
+        plt.plot(x_plot['time'], x_plot['error'])
+        plt.savefig('x_plot')
+        plt.figure()
+        plt.plot(y_plot['time'], y_plot['error'])
+        plt.savefig('y_plot')
+        plt.figure()
+        plt.plot(z_plot['time'], z_plot['error'])
+        plt.savefig('z_plot')
         node.land()
+        rosbag_proc.send_signal(subprocess.signal.SIGINT)
     except rospy.ROSInterruptException as e:
         print "Exception: {0}".format(str(e))
