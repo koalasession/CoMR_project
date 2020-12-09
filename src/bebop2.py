@@ -115,11 +115,6 @@ class Bebop_functions():
 
             rho = sqrt(delta_x*delta_x + delta_y*delta_y +
                        delta_z*delta_z)  # error to the goal
-            if rho < 0.2:
-                if len(WAYPOINTS) != 0:
-                    self.waypoint = WAYPOINTS.pop(0)
-                else:
-                    self.finished = True
             error_x = math.cos(self.yaw) * delta_x + \
                 math.sin(self.yaw) * delta_y
             error_y = -math.sin(self.yaw) * delta_x + \
@@ -137,6 +132,13 @@ class Bebop_functions():
 
             # publishing of angular rates and linear velocities
             self.cmdvel_publisher.publish(twist)
+            if rho < 0.2:
+                if len(WAYPOINTS) != 0:
+                    self.waypoint = WAYPOINTS.pop(0)
+                    rospy.sleep(3)
+                else:
+                    self.finished = True
+
             self.rate.sleep()
         if self.finished:
             self.land()
@@ -158,6 +160,8 @@ class Bebop_functions():
         quat = msg.transform.rotation
         (roll, pitch, self.yaw) = tf.transformations.euler_from_quaternion(
             (quat.x, quat.y, quat.z, quat.w))
+        print "current position = {}, {}, {}".format(
+            self.bebopose.x, self.bebopose.y, self.bebopose.z)
         self.safety_check()
 
 
