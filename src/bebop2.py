@@ -68,7 +68,7 @@ class Bebop_functions():
                                                          Ardrone3PilotingStateFlyingStateChanged, self.update_state)
         # Subscriber to the vicon transform node to read the position and quaternions of the bebop2
         self.bebopcoord_subscriber = rospy.Subscriber(
-            '/vicon/yolanda/yolanda', TransformStamped, self.bebop_pose)
+            '/vicon/parrot2020/parrot2020', TransformStamped, self.bebop_pose)
 
         self.state = None
         self.yaw = 0
