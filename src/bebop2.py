@@ -13,13 +13,13 @@ from bebop_msgs.msg import Ardrone3PilotingStateFlyingStateChanged
 
 
 UNIQUE_ID = uuid4()
-
+HOVER = False
 WAYPOINTS = [
-    (0, 0),
-    (1.5, 0),
-    (1.5, 1.5),
-    (0, 1.5),
-    (0, 0)
+    (0, 0, 1),
+    (1.5, 0, 1),
+    (1.5, 1.5, 1),
+    (0, 1.5, 1),
+    (0, 0 ,1)
 ]
 
 x_plot = {
@@ -107,9 +107,9 @@ class Bebop_functions():
         self.yaw = 0
         self.bebopose = Vector3()
 
-        self.controlX = PID(0.3, 0.006, 0.4)
-        self.controlY = PID(0.3, 0.006, 0.42)
-        self.controlZ = PID(0.12, 0.015, 0.25)
+        self.controlX = PID(0.8, 0.001, 1.5)
+        self.controlY = PID(0.8, 0.001, 1.5)
+        self.controlZ = PID(0.12, 0.01, 0.25)
 
         self.vel_lim = 2.0
         self.finished = False
@@ -139,14 +139,12 @@ class Bebop_functions():
     def move(self):  # Move function with a P controller.
 
         twist = Twist()
-        # destination fixed z
-        z = 1.0
 
         while not rospy.is_shutdown() and not self.finished:
 
             delta_x = self.waypoint[0] - self.bebopose.x  # position error
             delta_y = self.waypoint[1] - self.bebopose.y
-            delta_z = z - self.bebopose.z
+            delta_z = self.waypoint[2] - self.bebopose.z
 
             rho = sqrt(delta_x*delta_x + delta_y*delta_y +
                        delta_z*delta_z)  # error to the goal
@@ -176,7 +174,7 @@ class Bebop_functions():
             rospy.loginfo("rho: {:.2f},err = {:.2f}, {:.2f}, {:.2f}".format(rho, error_x, error_y, delta_z))
             # publishing of angular rates and linear velocities
             self.cmdvel_publisher.publish(twist)
-            if rho < 0.1:
+            if rho < 0.1 and not HOVER:
                 if len(WAYPOINTS) != 0:
                     self.waypoint = WAYPOINTS.pop(0)
                     print "new waypoint {}, {}".format(
@@ -215,7 +213,7 @@ class Bebop_functions():
 if __name__ == '__main__':
     try:
         import subprocess, shlex
-        command = "rosbag record -x bebop/image_raw -O {}".format(str(UNIQUE_ID))
+        command = "rosbag record -a -x bebop/image_raw -O {}".format(str(UNIQUE_ID))
         command = shlex.split(command)
         rosbag_proc = subprocess.Popen(command)
         node = Bebop_functions()
@@ -247,13 +245,13 @@ if __name__ == '__main__':
         fig, (idx1, idx2, idx3) = plt.subplots(3,1)
         idx1.plot(x_plot['time'], x_plot['error'])
         idx1.set_xlabel('x-axis')
-        idx2.set_ylabel('error')
+        idx1.set_ylabel('error')
         idx2.plot(y_plot['time'], y_plot['error'])
-        idx1.set_xlabel('x-axis')
+        idx2.set_xlabel('x-axis')
         idx2.set_ylabel('error')
         idx3.plot(z_plot['time'], z_plot['error'])
-        idx1.set_xlabel('x-axis')
-        idx2.set_ylabel('error')
+        idx3.set_xlabel('x-axis')
+        idx3.set_ylabel('error')
         fig.savefig('plots/{}'.format(str(UNIQUE_ID)))
 
         rosbag_proc.send_signal(subprocess.signal.SIGINT)
