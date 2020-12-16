@@ -3,17 +3,22 @@
 import rospy
 import tf
 import math
+import json
 import matplotlib.pyplot as plt
+from uuid import uuid4
 from math import atan2, sqrt, cos, sin, pi
 from std_msgs.msg import Empty
 from geometry_msgs.msg import Twist, TransformStamped, Vector3
 from bebop_msgs.msg import Ardrone3PilotingStateFlyingStateChanged
 
+
+UNIQUE_ID = uuid4()
+
 WAYPOINTS = [
     (0, 0),
-    (2.0, 0),
-    (2.0, 2.0),
-    (0, 2.0),
+    (1.5, 0),
+    (1.5, 1.5),
+    (0, 1.5),
     (0, 0)
 ]
 
@@ -29,6 +34,21 @@ z_plot = {
     'error': [],
     'time': []
 }
+
+
+# function to add to JSON 
+def write_json(new_data, filename='data.json'): 
+    with open(filename) as json_file: 
+        data = json.load(json_file) 
+        
+        temp = data['PID'] 
+   
+        # appending data to emp_details  
+        temp.append(new_data)
+
+    with open(filename,'w') as f: 
+        json.dump(data, f, indent=4)
+
 
 class PID(object):
     """PID class returns the pid error
@@ -81,21 +101,21 @@ class Bebop_functions():
                                                          Ardrone3PilotingStateFlyingStateChanged, self.update_state)
         # Subscriber to the vicon transform node to read the position and quaternions of the bebop2
         self.bebopcoord_subscriber = rospy.Subscriber(
-            '/vicon/parrot2020/parrot2020', TransformStamped, self.bebop_pose)
+            'vicon/Bepop2020/Bepop2020', TransformStamped, self.bebop_pose)
 
         self.state = None
         self.yaw = 0
         self.bebopose = Vector3()
 
-        self.controlX = PID(0.3, 0.003, 0.4)
-        self.controlY = PID(0.3, 0.003, 0.42)
-        self.controlZ = PID(0.12, 0.015, 0.2)
+        self.controlX = PID(0.3, 0.006, 0.4)
+        self.controlY = PID(0.3, 0.006, 0.42)
+        self.controlZ = PID(0.12, 0.015, 0.25)
 
         self.vel_lim = 2.0
         self.finished = False
         self.waypoint = WAYPOINTS.pop(0)
         # TransformStamped message update rate limited to 5 Hz, which limits to 5 Hz the subscribing rate.
-        self.rate = rospy.Rate(5)
+        self.rate = rospy.Rate(10)
 
     def takeoff(self):  # Take off command function
         while self.state != 2 and not rospy.is_shutdown():
@@ -195,24 +215,47 @@ class Bebop_functions():
 if __name__ == '__main__':
     try:
         import subprocess, shlex
-        command = "rosbag record -a -O ourbag"
+        command = "rosbag record -x bebop/image_raw -O {}".format(str(UNIQUE_ID))
         command = shlex.split(command)
         rosbag_proc = subprocess.Popen(command)
         node = Bebop_functions()
         node.takeoff()
         rospy.sleep(2)
         node.move()
-
-        plt.figure()
-        plt.plot(x_plot['time'], x_plot['error'])
-        plt.savefig('x_plot')
-        plt.figure()
-        plt.plot(y_plot['time'], y_plot['error'])
-        plt.savefig('y_plot')
-        plt.figure()
-        plt.plot(z_plot['time'], z_plot['error'])
-        plt.savefig('z_plot')
         node.land()
+
+        new_data = {
+            "fig": str(UNIQUE_ID),
+            "x": {
+                "p": node.controlX.kp,
+                "i": node.controlX.ki,
+                "d": node.controlX.kd,
+            },
+            "y": {
+                "p": node.controlY.kp,
+                "i": node.controlY.ki,
+                "d": node.controlY.kd,
+            },
+            "z": {
+                "p": node.controlZ.kp,
+                "i": node.controlZ.ki,
+                "d": node.controlZ.kd,
+            },
+        }
+        write_json(new_data)
+
+        fig, (idx1, idx2, idx3) = plt.subplots(3,1)
+        idx1.plot(x_plot['time'], x_plot['error'])
+        idx1.set_xlabel('x-axis')
+        idx2.set_ylabel('error')
+        idx2.plot(y_plot['time'], y_plot['error'])
+        idx1.set_xlabel('x-axis')
+        idx2.set_ylabel('error')
+        idx3.plot(z_plot['time'], z_plot['error'])
+        idx1.set_xlabel('x-axis')
+        idx2.set_ylabel('error')
+        fig.savefig('plots/{}'.format(str(UNIQUE_ID)))
+
         rosbag_proc.send_signal(subprocess.signal.SIGINT)
     except rospy.ROSInterruptException as e:
         print "Exception: {0}".format(str(e))
